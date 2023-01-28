@@ -1,1 +1,1 @@
-# .pyhttps://google.github.io/mediapipe/getting_started/cpp.html
+https://google.github.io/mediapipe/getting_started/cpp.html
