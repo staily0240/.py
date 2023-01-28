@@ -1,0 +1,63 @@
+// For video input and result rendering with OpenGL.
+HandsOptions handsOptions =
+    HandsOptions.builder()
+        .setStaticImageMode(false)
+        .setMaxNumHands(2)
+        .setRunOnGpu(true).build();
+Hands hands = new Hands(this, handsOptions);
+hands.setErrorListener(
+    (message, e) -> Log.e(TAG, "MediaPipe Hands error:" + message));
+
+// Initializes a new VideoInput instance and connects it to MediaPipe Hands Solution.
+VideoInput videoInput = new VideoInput(this);
+videoInput.setNewFrameListener(
+    textureFrame -> hands.send(textureFrame));
+
+// Initializes a new GlSurfaceView with a ResultGlRenderer<HandsResult> instance
+// that provides the interfaces to run user-defined OpenGL rendering code.
+// See mediapipe/examples/android/solutions/hands/src/main/java/com/google/mediapipe/examples/hands/HandsResultGlRenderer.java
+// as an example.
+SolutionGlSurfaceView<HandsResult> glSurfaceView =
+    new SolutionGlSurfaceView<>(
+        this, hands.getGlContext(), hands.getGlMajorVersion());
+glSurfaceView.setSolutionResultRenderer(new HandsResultGlRenderer());
+glSurfaceView.setRenderInputImage(true);
+
+hands.setResultListener(
+    handsResult -> {
+      if (result.multiHandLandmarks().isEmpty()) {
+        return;
+      }
+      NormalizedLandmark wristLandmark =
+          handsResult.multiHandLandmarks().get(0).getLandmarkList().get(HandLandmark.WRIST);
+      Log.i(
+          TAG,
+          String.format(
+              "MediaPipe Hand wrist normalized coordinates (value range: [0, 1]): x=%f, y=%f",
+              wristLandmark.getX(), wristLandmark.getY()));
+      // Request GL rendering.
+      glSurfaceView.setRenderData(handsResult);
+      glSurfaceView.requestRender();
+    });
+
+ActivityResultLauncher<Intent> videoGetter =
+    registerForActivityResult(
+        new ActivityResultContracts.StartActivityForResult(),
+        result -> {
+          Intent resultIntent = result.getData();
+          if (resultIntent != null) {
+            if (result.getResultCode() == RESULT_OK) {
+              glSurfaceView.post(
+                  () ->
+                      videoInput.start(
+                          this,
+                          resultIntent.getData(),
+                          hands.getGlContext(),
+                          glSurfaceView.getWidth(),
+                          glSurfaceView.getHeight()));
+            }
+          }
+        });
+Intent pickVideoIntent = new Intent(Intent.ACTION_PICK);
+pickVideoIntent.setDataAndType(MediaStore.Video.Media.INTERNAL_CONTENT_URI, "video/*");
+videoGetter.launch(pickVideoIntent);
